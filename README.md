@@ -1,10 +1,10 @@
-# Kafka Streaming Job
+# iomete: Kafka Streaming Job
 
 This is a collection of data movement capabilities. This streaming job copies data from Kafka to Iceberg.
 
 Currently, two serialization format supported.
 1. JSON
-2. Avro
+2. AVRO
 
 ## JSON deserialization
 In the Spark configuration, a user-defined reference json schema can be defined, 
@@ -16,14 +16,40 @@ Converts binary data according to the schema defined by the user or retrieves th
 
 ![avro-deserialization-diagram](docs/diagram/avro-diagram.jpg)
 
-## Get started
-1. Create `.envrc` file with path to local spark
+### Configuration example
 
-```shell
-export SPARK_LOCATION=(location to local spark folder)
+```hocon
+{
+      "kafka": {
+          "bootstrap_servers": "localhost:9092",
+          "topic_name": "test-json",
+          "serialization_format": "json",
+          "starting_offsets": "latest",
+          "trigger": {
+            "interval": "5"
+            "unit": "seconds" # minutes
+          },
+          "schema_registry_url": "http://127.0.0.1:8081" # for avro topics
+      },
+      "database": {
+        "table_name": "spark_usage"
+      }
+}
 ```
 
-2. Submit Spark
+## Development
+
+**Prepare the dev environment**
+
 ```shell
-make submit
+virtualenv .env #or python3 -m venv .env
+source .env/bin/activate
+
+pip install -e ."[dev]"
+```
+
+**Run test**
+
+```shell
+pytest
 ```
