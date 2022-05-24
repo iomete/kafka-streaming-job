@@ -1,3 +1,5 @@
+import os
+
 from pyspark.sql import SparkSession
 
 from kafka_streaming_job.sync._data_sync import DataSync
@@ -10,12 +12,13 @@ class JsonSync(DataSync):
         self.spark = spark
         self.config = config
 
-        self.spark.sparkContext.setLogLevel("ERROR")
+        self.spark.sparkContext.setLogLevel(os.getenv("LOG_LEVEL"))
         self.logger = PySparkLogger(spark).get_logger(__name__)
 
         self.logger.info("pyspark script logger initialized")
 
-    def process(self):
+    def sync(self):
+        self.logger.info(f"json data sync started for topic = {self.config.kafka.topic_name}")
         df = self.spark.readStream \
             .format("kafka") \
             .option("kafka.bootstrap.servers", self.config.kafka.bootstrap_servers) \
@@ -25,32 +28,38 @@ class JsonSync(DataSync):
             .selectExpr("CAST(value AS STRING)")
 
         df.writeStream \
-            .foreachBatch(self.foreach_batch_sink) \
+            .foreachBatch(self.foreach_batch_sync) \
             .trigger(processingTime=self.config.kafka.processing_time) \
             .start() \
             .awaitTermination()
 
-    def foreach_batch_sink(self, df, epoch_id):
+    def foreach_batch_sync(self, df, epoch_id):
         """
-        Responsible for processing micro batches for every batch processing.;
-        :param df: Batch dataframe to be written.;
-        :param epoch_id: Micro batch epoch id.;
+        Responsible for processing micro batches for every batch processing.
+
+        :param df: Batch dataframe to be written.
+        :param epoch_id: Micro batch epoch id.
         """
+        self.logger.debug(f"foreach_batch_sync epoc_id = {epoch_id} "
+                          f"start for table = {self.config.database.table_name}")
         if not df.rdd.isEmpty():
             try:
-                parsedDF = self.bytesToCatalyst(df).select("value.*")
+                parsedDF = self.bytes_to_catalyst(df).select("value.*")
 
                 parsedDF.write.saveAsTable(self.config.database.table_name,
                                            format='iceberg',
                                            mode='append')
-            except Exception:
-                self.logger.error("error stream processing table=" + self.config.database.table_name)
+            except Exception as e:
+                self.logger.error(f"error stream processing for table = {self.config.database.table_name}, "
+                                  f"topic = {self.config.kafka.topic_name}")
+                self.logger.error(e)
         else:
-            self.logger.info("kafka topic is empty")
+            self.logger.debug(f"kafka topic = {self.config.kafka.topic_name} is empty")
 
-    def bytesToCatalyst(self, df):
+    def bytes_to_catalyst(self, df):
         """
         Converts kafka bytes to json string to catalyst dataframe.
+
         :param df: Dataframe to convert.
         :return: Catalyst dataframe.
         """
@@ -63,6 +72,7 @@ class JsonSync(DataSync):
         """
         Inference of a JSON schema from a dataframe.
         It considers the schema of the first row and assumes the rest of the rows is compatible.
+
         :param df: Dataframe to be inferred.
         :return: Inferred string JSON schema.
         """
@@ -73,6 +83,7 @@ class JsonSync(DataSync):
     def convert_columns(df, column, schema):
         """
         Converts kafka bytes to json string to catalyst dataframe.
+
         :param df: Dataframe to be converted.
         :param column: Column to be converted.
         :param schema: Reference schema to convert column.

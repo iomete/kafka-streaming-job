@@ -1,6 +1,9 @@
+import os
 from dataclasses import dataclass
 
 from pyhocon import ConfigFactory
+
+checkpointLocation = "kafka-streaming/data/_checkpoints_" + os.getenv("SPARK_INSTANCE_ID")
 
 
 class SerializationFormat:
@@ -25,6 +28,7 @@ class KafkaConfig:
     processing_time: str
     serialization_format: SerializationFormat
     schema_registry_url: str
+    checkpoint_location: str
 
 
 @dataclass
@@ -52,7 +56,8 @@ def get_config(application_path) -> ApplicationConfig:
         processing_time=format_processing_time(config['kafka']['trigger']['interval'],
                                                config['kafka']['trigger']['unit']),
         serialization_format=SerializationFormat.from_str(config['kafka']['serialization_format']),
-        schema_registry_url=config['kafka']['schema_registry_url']
+        schema_registry_url=config['kafka']['schema_registry_url'],
+        checkpoint_location=checkpointLocation
     )
 
     database = DbConfig(table_name=config['database']['table_name'])

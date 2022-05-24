@@ -6,8 +6,8 @@ WORKDIR "/app"
 USER 0
 
 # add source code to the /app directory
-COPY setup.py setup.cfg driver.py application.conf ./
-COPY kafka_streaming_job ./kafka_streaming_job
+COPY ../setup.py setup.cfg driver.py ./
+COPY ../kafka_streaming_job ./kafka_streaming_job
 
 RUN apt-get update -y
 RUN apt-get install -y librdkafka-dev

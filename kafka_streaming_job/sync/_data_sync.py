@@ -4,9 +4,10 @@ from abc import abstractmethod
 class DataSync:
 
     @abstractmethod
-    def process(self):
+    def sync(self):
         """
-        Responsible for processing spark streaming
+        Responsible for processing spark streaming data synchronisation
+
         :return:
         """
         pass

@@ -9,9 +9,9 @@ from kafka_streaming_job.sync.json_sync import JsonSync
 
 def start_job(spark: SparkSession, config):
     job = None
-    print(config.kafka.serialization_format)
     if config.kafka.serialization_format == SerializationFormat.JSON:
         job = JsonSync(spark, config)
     elif config.kafka.serialization_format == SerializationFormat.AVRO:
         job = AvroSync(spark, config)
-    job.process()
+    job.sync()
+

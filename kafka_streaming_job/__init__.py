@@ -2,4 +2,4 @@
 
 __author__ = """Namig Aliyev"""
 __email__ = 'namig@iomete.com'
-__version__ = '0.1.1'
+__version__ = '0.1.6'
