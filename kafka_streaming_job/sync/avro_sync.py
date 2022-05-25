@@ -34,12 +34,12 @@ class AvroSync(DataSync):
 
         df.writeStream \
             .foreachBatch(
-            lambda df, epoch_id:
-            self.foreach_batch_sync(
-                df=df, epoch_id=epoch_id, logger=self.logger,
-                table_name=self.config.database.table_name,
-                topic_name=self.config.kafka.topic_name)
-        ) \
+                lambda df, epoch_id:
+                self.foreach_batch_sync(
+                    df=df, epoch_id=epoch_id, logger=self.logger,
+                    table_name=self.config.database.table_name,
+                    topic_name=self.config.kafka.topic_name)
+            ) \
             .trigger(processingTime=self.config.kafka.processing_time) \
             .start() \
             .awaitTermination()

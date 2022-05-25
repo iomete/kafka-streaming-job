@@ -1,5 +1,9 @@
 # iomete: Kafka Streaming Job
 
+<p align="center">
+<img src="docs/iomete-logo.png" width="250" /> <img src="docs/apache-kafka-logo.png" width="250" />
+</p>
+
 This is a collection of data movement capabilities. This streaming job copies data from Kafka to Iceberg.
 
 Currently, two serialization format supported.
