@@ -1,25 +1,19 @@
-import os
-
 import requests
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 from pyspark.sql.avro.functions import from_avro
 
 from kafka_streaming_job.sync._data_sync import DataSync
-from kafka_streaming_job.utils import PySparkLogger
+from kafka_streaming_job.iometeLogger import iometeLogger
 
 
 class AvroSync(DataSync):
     def __init__(self, spark: SparkSession, config):
         self.spark = spark
         self.config = config
-
         self.schema = self.retrieve_schema(self.config.kafka.schema_registry_url,
                                            self.config.kafka.topic_name)
-
-        self.spark.sparkContext.setLogLevel(os.getenv("LOG_LEVEL"))
-        self.logger = PySparkLogger(spark).get_logger(__name__)
-        self.logger.info("pyspark script logger initialized")
+        self.logger = iometeLogger(__name__).get_logger()
 
     def sync(self):
         self.logger.info(f"avro data sync started for topic = {self.config.kafka.topic_name}")
@@ -37,7 +31,8 @@ class AvroSync(DataSync):
                 lambda df, epoch_id:
                 self.foreach_batch_sync(
                     df=df, epoch_id=epoch_id, logger=self.logger,
-                    table_name=self.config.database.table_name,
+                    schema=self.config.database.schema,
+                    table=self.config.database.table,
                     topic_name=self.config.kafka.topic_name)
             ) \
             .trigger(processingTime=self.config.kafka.processing_time) \
@@ -47,25 +42,27 @@ class AvroSync(DataSync):
     @staticmethod
     def foreach_batch_sync(
             df, epoch_id, logger,
-            table_name, topic_name):
+            schema, table, topic_name):
         """
         Responsible for processing micro batches for every batch processing.;
 
         :param df: Batch dataframe to be written.;
         :param epoch_id: Micro batch epoch id.;
-        :param table_name: Database table name;
+        :param schema: Database schema name;
+        :param table: Database table name;
         :param topic_name: Kafka topic name;
         :param logger: Logger
         """
-        logger.debug(f"foreach_batch_sync epoc_id = {epoch_id} "
-                     f"start for table = {table_name}")
+        logger.debug(f"epoc_id = {epoch_id} start for table = {table}")
         if not df.rdd.isEmpty():
             try:
-                df.write.saveAsTable(table_name,
-                                     format='iceberg',
-                                     mode='append')
+                df.write.saveAsTable(
+                    AvroSync.complete_db_destination(schema, table),
+                    format='iceberg',
+                    mode='append'
+                )
             except Exception as e:
-                logger.error(f"error stream processing for table = {table_name}, "
+                logger.error(f"error stream processing for table = {table}, "
                              f"topic = {topic_name}")
                 logger.error(e)
         else:
@@ -88,3 +85,7 @@ class AvroSync(DataSync):
         # extract the schema from the response
         schema = response.text
         return schema
+
+    @staticmethod
+    def complete_db_destination(schema, table):
+        return "{}.{}".format(schema, table)

@@ -33,7 +33,8 @@ class KafkaConfig:
 
 @dataclass
 class DbConfig:
-    table_name: str
+    schema: str
+    table: str
 
 
 @dataclass
@@ -60,7 +61,10 @@ def get_config(application_path) -> ApplicationConfig:
         checkpoint_location=checkpointLocation
     )
 
-    database = DbConfig(table_name=config['database']['table_name'])
+    database = DbConfig(
+        schema=config['database']['schema'],
+        table=config['database']['table']
+    )
 
     return ApplicationConfig(
         kafka=kafka,

@@ -1,21 +1,16 @@
-import os
-
 from pyspark.sql import SparkSession
 
 from kafka_streaming_job.sync._data_sync import DataSync
-from kafka_streaming_job.utils import PySparkLogger
 from pyspark.sql.functions import schema_of_json, from_json, col
+
+from kafka_streaming_job.iometeLogger import iometeLogger
 
 
 class JsonSync(DataSync):
     def __init__(self, spark: SparkSession, config):
         self.spark = spark
         self.config = config
-
-        self.spark.sparkContext.setLogLevel(os.getenv("LOG_LEVEL"))
-        self.logger = PySparkLogger(spark).get_logger(__name__)
-
-        self.logger.info("pyspark script logger initialized")
+        self.logger = iometeLogger(__name__).get_logger()
 
     def sync(self):
         self.logger.info(f"json data sync started for topic = {self.config.kafka.topic_name}")
@@ -40,17 +35,18 @@ class JsonSync(DataSync):
         :param df: Batch dataframe to be written.
         :param epoch_id: Micro batch epoch id.
         """
-        self.logger.debug(f"foreach_batch_sync epoc_id = {epoch_id} "
-                          f"start for table = {self.config.database.table_name}")
+        self.logger.debug(f"epoc_id = {epoch_id} start for table = {self.config.database.table}")
         if not df.rdd.isEmpty():
             try:
                 parsedDF = self.bytes_to_catalyst(df).select("value.*")
 
-                parsedDF.write.saveAsTable(self.config.database.table_name,
-                                           format='iceberg',
-                                           mode='append')
+                parsedDF.write.saveAsTable(
+                    self.complete_db_destination(self.config.database.schema, self.config.database.table),
+                    format='iceberg',
+                    mode='append'
+                )
             except Exception as e:
-                self.logger.error(f"error stream processing for table = {self.config.database.table_name}, "
+                self.logger.error(f"error stream processing for table = {self.config.database.table}, "
                                   f"topic = {self.config.kafka.topic_name}")
                 self.logger.error(e)
         else:
@@ -90,3 +86,7 @@ class JsonSync(DataSync):
         :return: Data frame
         """
         return df.withColumn(column, from_json(df.select(col(column)).value, schema))
+
+    @staticmethod
+    def complete_db_destination(schema, table):
+        return "{}.{}".format(schema, table)
