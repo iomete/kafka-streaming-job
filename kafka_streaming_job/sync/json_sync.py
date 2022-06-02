@@ -1,30 +1,33 @@
+import logging
 from pyspark.sql import SparkSession
 
 from kafka_streaming_job.sync._data_sync import DataSync
 from pyspark.sql.functions import schema_of_json, from_json, col
 
-from kafka_streaming_job.iometeLogger import iometeLogger
+logger = logging.getLogger(__name__)
 
 
 class JsonSync(DataSync):
     def __init__(self, spark: SparkSession, config):
         self.spark = spark
         self.config = config
-        self.logger = iometeLogger(__name__).get_logger()
+        self.streaming_query = None
 
     def sync(self):
-        self.logger.info(f"json data sync started for topic = {self.config.kafka.topic_name}")
+        logger.info(f"json data sync started for topic = {self.config.kafka.topic}")
         df = self.spark.readStream \
             .format("kafka") \
             .option("kafka.bootstrap.servers", self.config.kafka.bootstrap_servers) \
-            .option("subscribe", self.config.kafka.topic_name) \
+            .option("subscribe", self.config.kafka.topic) \
             .option("startingOffsets", self.config.kafka.starting_offsets) \
+            .option("group.id", self.config.kafka.group_id) \
             .load() \
             .selectExpr("CAST(value AS STRING)")
 
-        df.writeStream \
+        self.streaming_query = df.writeStream \
             .foreachBatch(self.foreach_batch_sync) \
             .trigger(processingTime=self.config.kafka.processing_time) \
+            .option("checkpointLocation", self.config.checkpoint_location) \
             .start() \
             .awaitTermination()
 
@@ -35,7 +38,7 @@ class JsonSync(DataSync):
         :param df: Batch dataframe to be written.
         :param epoch_id: Micro batch epoch id.
         """
-        self.logger.debug(f"epoc_id = {epoch_id} start for table = {self.config.database.table}")
+        logger.debug(f"epoc_id = {epoch_id} start for table = {self.config.database.table}")
         if not df.rdd.isEmpty():
             try:
                 parsedDF = self.bytes_to_catalyst(df).select("value.*")
@@ -46,11 +49,11 @@ class JsonSync(DataSync):
                     mode='append'
                 )
             except Exception as e:
-                self.logger.error(f"error stream processing for table = {self.config.database.table}, "
-                                  f"topic = {self.config.kafka.topic_name}")
-                self.logger.error(e)
+                logger.error(f"error stream processing for table = {self.config.database.table}, "
+                             f"topic = {self.config.kafka.topic}")
+                logger.error(e)
         else:
-            self.logger.debug(f"kafka topic = {self.config.kafka.topic_name} is empty")
+            logger.debug(f"kafka topic = {self.config.kafka.topic} is empty")
 
     def bytes_to_catalyst(self, df):
         """
@@ -61,7 +64,7 @@ class JsonSync(DataSync):
         """
         schema = self.infer_json_schema(df)
 
-        return self.convert_columns(df, "value", schema)
+        return self.convert_column_from_json_schema(df, "value", schema)
 
     @staticmethod
     def infer_json_schema(df):
@@ -76,7 +79,7 @@ class JsonSync(DataSync):
         return df.select(schema_of_json(first_row.value)).head()[0]
 
     @staticmethod
-    def convert_columns(df, column, schema):
+    def convert_column_from_json_schema(df, column, schema):
         """
         Converts kafka bytes to json string to catalyst dataframe.
 
@@ -90,3 +93,8 @@ class JsonSync(DataSync):
     @staticmethod
     def complete_db_destination(schema, table):
         return "{}.{}".format(schema, table)
+
+    def stop(self):
+        logger.info("stopping...")
+        self.streaming_query.stop()
+        logger.info("stopped")

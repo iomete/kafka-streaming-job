@@ -1,5 +1,5 @@
 docker_image := iomete/iomete_kafka_streaming
-docker_tag := 0.1.8
+docker_tag := 0.2.1
 
 test:
 	python setup.py test

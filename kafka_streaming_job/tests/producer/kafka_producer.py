@@ -1,60 +1,69 @@
-from time import sleep
-from json import dumps
 from uuid import uuid4
 
-from kafka import KafkaProducer
 from confluent_kafka import SerializingProducer
 from confluent_kafka.serialization import StringSerializer
 from confluent_kafka.schema_registry import SchemaRegistryClient
 from confluent_kafka.schema_registry.avro import AvroSerializer
+from confluent_kafka.schema_registry.json_schema import JSONSerializer
+
+
+def user_to_dict(user, ctx):
+    return dict(first_name=user.first_name,
+                last_name=user.last_name)
 
 
 def kafka_json_producer():
-    producer = KafkaProducer(bootstrap_servers=['localhost:9092'],
-                             value_serializer=lambda x:
-                             dumps(x).encode('utf-8'))
+    topic = "json-topic"
 
-    for e in range(10):
-        data = {'number': e}
-        producer.send('numtest', value=data)
-        sleep(5)
+    schema_registry_conf = {'url': "http://127.0.0.1:8081"}
+    schema_registry_client = SchemaRegistryClient(schema_registry_conf)
+
+    json_serializer = JSONSerializer(JSON_SCHEMA,
+                                     schema_registry_client,
+                                     user_to_dict)
+
+    producer_conf = {
+        'bootstrap.servers': "localhost:9092",
+        'key.serializer': StringSerializer('utf_8'),
+        'value.serializer': json_serializer
+    }
+
+    producer = SerializingProducer(producer_conf)
+
+    produce_messages(topic=topic, producer=producer)
 
 
 def kafka_avro_producer():
-    schema_str = """
-        {
-          "namespace": "com.avro.stream",
-          "type": "record",
-          "name": "myrecord",
-          "fields": [
-            {"name": "f1", "type": "string"},
-            {"name": "f2",  "type": "int"}
-          ]
-        }
-        """
-    topic = "test-avro"
+    topic = "avro-topic"
     schema_registry_conf = {'url': "http://127.0.0.1:8081"}
     schema_registry_client = SchemaRegistryClient(schema_registry_conf)
 
     avro_serializer = AvroSerializer(schema_registry_client,
-                                     schema_str)
+                                     AVRO_SCHEMA,
+                                     user_to_dict)
 
-    producer_conf = {'bootstrap.servers': "localhost:9092",
-                     'key.serializer': StringSerializer('utf_8'),
-                     'value.serializer': avro_serializer}
+    producer_conf = {
+        'bootstrap.servers': "localhost:9092",
+        'key.serializer': StringSerializer('utf_8'),
+        'value.serializer': avro_serializer
+    }
 
     producer = SerializingProducer(producer_conf)
 
-    print("Producing mock class records to topic {}. ^C to exit.".format(topic))
+    produce_messages(topic=topic, producer=producer)
+
+
+def produce_messages(topic: str, producer: SerializingProducer):
     for i in range(10):
         producer.poll(0.0)
         try:
-            f1 = "{} {}".format("random", i)
-            f2 = i
-            user = MockClass(f1=f1,
-                             f2=f2, )
-            producer.produce(topic=topic, key=str(uuid4()), value=user,
-                             on_delivery=delivery_report)
+            user = User(
+                first_name="asdasd",
+                last_name="sdsds"
+            )
+            producer.produce(
+                topic=topic, value=user, on_delivery=delivery_report
+            )
         except KeyboardInterrupt:
             break
         except ValueError:
@@ -65,46 +74,53 @@ def kafka_avro_producer():
         producer.flush()
 
 
+JSON_SCHEMA = """
+        {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "title": "User",
+          "description": "A Confluent Kafka Python User",
+          "type": "object",
+          "properties": {
+            "first_name": {
+              "description": "User's first name",
+              "type": "string"
+            },
+            "last_name": {
+              "description": "User's last name",
+              "type": "string"
+            }
+          },
+          "required": [ "first_name", "last_name" ]
+        }
+        """
+
+AVRO_SCHEMA = """
+        {
+          "namespace": "com.avro.stream",
+          "type": "record",
+          "name": "user_record",
+          "fields": [
+            {"name": "first_name", "type": "string"},
+            {"name": "last_name",  "type": "string"}
+          ]
+        }
+        """
+
+
 class User(object):
     """
     User record
     Args:
-        firstname (str): first name
-        lastname (int): lastname
+        first_name (str): first name
+        last_name (str): lastname
     """
 
-    def __init__(self, firstname, lastname):
-        self.firstname = firstname
-        self.lastname = lastname
-
-
-class MockClass(object):
-    """
-    User record
-    Args:
-        f1 (str): first field
-        f2 (int): second field
-    """
-
-    def __init__(self, f1, f2):
-        self.f1 = f1
-        self.f2 = f2
+    def __init__(self, first_name: str, last_name: str):
+        self.first_name = first_name
+        self.last_name = last_name
 
 
 def delivery_report(err, msg):
-    """
-    Reports the failure or success of a message delivery.
-    Args:
-        err (KafkaError): The error that occurred on None on success.
-        msg (Message): The message that was produced or failed.
-    Note:
-        In the delivery report callback the Message.key() and Message.value()
-        will be the binary format as encoded by any configured Serializers and
-        not the same object that was passed to produce().
-        If you wish to pass the original object(s) for key and value to delivery
-        report callback we recommend a bound callback or lambda where you pass
-        the objects along.
-    """
     if err is not None:
         print("Delivery failed for User record {}: {}".format(msg.key(), err))
         return

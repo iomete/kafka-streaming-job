@@ -23,12 +23,12 @@ class SerializationFormat:
 @dataclass
 class KafkaConfig:
     bootstrap_servers: str
-    topic_name: str
+    topic: str
     starting_offsets: str
+    group_id: str
     processing_time: str
     serialization_format: SerializationFormat
     schema_registry_url: str
-    checkpoint_location: str
 
 
 @dataclass
@@ -41,6 +41,7 @@ class DbConfig:
 class ApplicationConfig:
     kafka: KafkaConfig
     database: DbConfig
+    checkpoint_location: str
 
 
 def format_processing_time(interval, unit):
@@ -52,13 +53,13 @@ def get_config(application_path) -> ApplicationConfig:
 
     kafka = KafkaConfig(
         bootstrap_servers=config['kafka']['bootstrap_servers'],
-        topic_name=config['kafka']['topic_name'],
+        topic=config['kafka']['topic'],
         starting_offsets=config['kafka']['starting_offsets'],
+        group_id=config['kafka']['group_id'],
         processing_time=format_processing_time(config['kafka']['trigger']['interval'],
                                                config['kafka']['trigger']['unit']),
         serialization_format=SerializationFormat.from_str(config['kafka']['serialization_format']),
-        schema_registry_url=config['kafka']['schema_registry_url'],
-        checkpoint_location=checkpointLocation
+        schema_registry_url=config['kafka']['schema_registry_url']
     )
 
     database = DbConfig(
@@ -68,5 +69,6 @@ def get_config(application_path) -> ApplicationConfig:
 
     return ApplicationConfig(
         kafka=kafka,
-        database=database
+        database=database,
+        checkpoint_location=checkpointLocation
     )

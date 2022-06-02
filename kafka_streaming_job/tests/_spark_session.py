@@ -1,7 +1,11 @@
+import pathlib
+
 from pyspark.sql import SparkSession
 
+jars = [filepath.absolute().__str__() for filepath in pathlib.Path("docker/jars/").glob('**/*')]
+
 jar_dependencies = [
-    "org.apache.spark:spark-sql-kafka-0-10_2.12:3.2.1"
+    "org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2"
 ]
 
 packages = ",".join(jar_dependencies)
@@ -17,6 +21,7 @@ def get_spark_session():
         .config("spark.sql.catalog.spark_catalog.type", "hadoop") \
         .config("spark.sql.catalog.spark_catalog.warehouse", "lakehouse") \
         .config("spark.jars.packages", packages) \
+        .config("spark.jars", ",".join(jars)) \
         .config("spark.sql.legacy.createHiveTableByDefault", "false") \
         .config("spark.sql.sources.default", "iceberg") \
         .getOrCreate()
