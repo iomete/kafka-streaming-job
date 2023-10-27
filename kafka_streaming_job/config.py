@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from pyhocon import ConfigFactory
 
-checkpointLocation = "kafka-streaming/data/_checkpoints_" + os.getenv("SPARK_INSTANCE_ID")
+checkpointLocation = "kafka-streaming/data/_checkpoints_" + os.getenv("SPARK_APPLICATION_ID")
 
 
 class SerializationFormat:
